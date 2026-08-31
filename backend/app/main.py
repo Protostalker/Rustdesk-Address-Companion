@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import init_db
 from .logging_config import configure_logging
-from .routers import assignments, companies, devices, health, sync
+from .routers import assignments, companies, devices, health, settings as settings_router, sync
 from .services.presence_scheduler import presence_scheduler
 from .services.sync_scheduler import scheduler
 
@@ -65,3 +65,4 @@ app.include_router(companies.router, prefix="/api")
 app.include_router(devices.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(sync.router, prefix="/api")
+app.include_router(settings_router.router, prefix="/api")

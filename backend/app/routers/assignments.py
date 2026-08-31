@@ -9,11 +9,9 @@ from ..database import get_db
 from ..models import Company, Device, DeviceCompanyAssignment
 from ..schemas import AssignmentCreate, DeviceCompanyOut, DeviceOut
 from .devices import _to_out as _device_to_out
+from .settings import get_max_companies_per_device
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
-
-
-MAX_COMPANIES_PER_DEVICE = 2
 
 
 @router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
@@ -25,16 +23,18 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
-    # App-layer cap check before we hit the DB trigger.
+    # App-layer cap check before we hit the DB trigger. The cap is now
+    # admin-configurable and lives in the app_settings row.
+    max_companies = get_max_companies_per_device(db)
     current_count = db.scalar(
         select(func.count(DeviceCompanyAssignment.id)).where(
             DeviceCompanyAssignment.device_id == device.id
         )
     ) or 0
-    if current_count >= MAX_COMPANIES_PER_DEVICE:
+    if current_count >= max_companies:
         raise HTTPException(
             status_code=400,
-            detail=f"Device already assigned to the maximum of {MAX_COMPANIES_PER_DEVICE} companies",
+            detail=f"Device already assigned to the maximum of {max_companies} companies",
         )
 
     existing = db.execute(
@@ -52,10 +52,10 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db)):
     except IntegrityError as exc:
         db.rollback()
         # The DB trigger fires as a last-resort safeguard.
-        if "max 2 companies per device" in str(exc.orig).lower():
+        if "max companies per device" in str(exc.orig).lower():
             raise HTTPException(
                 status_code=400,
-                detail=f"Device already assigned to the maximum of {MAX_COMPANIES_PER_DEVICE} companies",
+                detail=f"Device already assigned to the maximum of {max_companies} companies",
             )
         raise HTTPException(status_code=409, detail="Assignment conflict")
 

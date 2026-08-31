@@ -152,3 +152,21 @@ class HealthOut(BaseModel):
     rustdesk_db_path: str
     sync_interval_seconds: int
     launch_rustdesk_enabled: bool
+
+
+class AppSettingsOut(BaseModel):
+    max_companies_per_device: int
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("updated_at")
+    def _ser_updated(self, v: datetime) -> str:
+        return _iso_utc(v)
+
+
+class AppSettingsUpdate(BaseModel):
+    # Hard upper bound stops accidental values from turning the UI into a mess
+    # (each pill takes real estate in the drawer) and stops the trigger from
+    # having to fend off DoS-style inserts. 20 is generous.
+    max_companies_per_device: int = Field(..., ge=1, le=20)

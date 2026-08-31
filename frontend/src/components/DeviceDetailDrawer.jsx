@@ -3,9 +3,15 @@ import { api } from '../api.js'
 import CopyButton from './CopyButton.jsx'
 import { rustdeskConnectUrl } from './DeviceCard.jsx'
 
-const MAX_COMPANIES = 2
+// Fallback used only if the parent forgot to pass down the setting. The real
+// cap is fetched from GET /api/settings and threaded in via the maxCompanies
+// prop; the admin can change it from Setup → Settings.
+const MAX_COMPANIES_FALLBACK = 2
 
-export default function DeviceDetailDrawer({ device, companies, onClose, onChanged, onToast }) {
+export default function DeviceDetailDrawer({ device, companies, onClose, onChanged, onToast, maxCompanies }) {
+  const MAX_COMPANIES = Number.isFinite(maxCompanies) && maxCompanies > 0
+    ? maxCompanies
+    : MAX_COMPANIES_FALLBACK
   const [nickname, setNickname] = useState(device.nickname || '')
   const [hostname, setHostname] = useState(device.hostname || '')
   const [notes, setNotes] = useState(device.notes || '')

@@ -18,8 +18,9 @@ exposes a clean internal-admin web UI.
 - Background sync on startup and every `SYNC_INTERVAL_SECONDS`.
 - Admin metadata (nickname, notes, company assignments) survives every
   re-sync — import only updates RustDesk-derived fields.
-- Max **2 companies per device**, enforced in the API, the UI, and the
-  SQLite schema (trigger).
+- Configurable **max companies per device**, enforced in the API, the
+  UI, and the SQLite schema (trigger). Default is 2; admins can change
+  the cap live from **Setup → Settings** (range 1–20).
 - Two clearly distinct areas:
   - **Home** — dark operator console, address book + launcher.
   - **Setup** — light admin panel for CRUD + sync inspection.
@@ -100,7 +101,6 @@ If the schema changes or the heuristic does not find a table:
    ```bash
    cp .env.example .env
    # Edit .env and set RUSTDESK_HOST_DATA_DIR to your RustDesk OSS
-   # POINT IT TO YOUR SQLITE DIRECTORY AND NOT THE SQLITE FILE DIRECTLY.
    # server data directory.
    ```
 
@@ -215,8 +215,13 @@ All routes are under `/api`.
 - `POST /devices` / `GET /devices/{id}` / `PATCH /devices/{id}` / `DELETE /devices/{id}`
 - `POST /assignments` (body `{device_id, company_id}`) / `DELETE /assignments?device_id=..&company_id=..`
 - `GET /sync/status` / `POST /sync/trigger` / `GET /sync/schema`
+- `GET /settings` / `PATCH /settings` (body `{max_companies_per_device}`)
 
-Max-2-companies rule returns `400` with a clear error.
+The max-companies rule returns `400` with a clear error. The cap
+itself is stored in the app's own SQLite DB (`app_settings` singleton
+row) and is editable from the Setup UI or by PATCHing the endpoint;
+lowering it is refused if any device currently has more assignments
+than the new cap.
 
 ## Safety
 

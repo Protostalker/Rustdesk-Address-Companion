@@ -13,16 +13,19 @@ export default function Home({ onToast, launchEnabled }) {
   const [search, setSearch] = useState('')
   const [syncStatus, setSyncStatus] = useState(null)
   const [drawerDevice, setDrawerDevice] = useState(null)
+  const [settings, setSettings] = useState(null)
 
   const refresh = useCallback(async () => {
-    const [cs, ds, st] = await Promise.all([
+    const [cs, ds, st, sg] = await Promise.all([
       api.listCompanies(),
       api.listDevices(),
       api.syncStatus(),
+      api.getSettings(),
     ])
     setCompanies(cs)
     setDevices(ds)
     setSyncStatus(st)
+    setSettings(sg)
   }, [])
 
   useEffect(() => {
@@ -135,6 +138,7 @@ export default function Home({ onToast, launchEnabled }) {
         <DeviceDetailDrawer
           device={drawerDevice}
           companies={companies}
+          maxCompanies={settings?.max_companies_per_device}
           onClose={() => setDrawerDevice(null)}
           onChanged={async (deleted) => {
             await refresh()

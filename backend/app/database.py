@@ -55,27 +55,36 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """Create all tables and the max-two-companies trigger."""
+    """Create tables, seed the singleton settings row, and (re)create the
+    max-companies-per-device trigger against the current settings value."""
     from . import models  # noqa: F401  (ensures model registration)
 
     Base.metadata.create_all(bind=engine)
 
-    # Database-level safeguard for the "max 2 companies per device" rule.
-    # The application layer also enforces this, but this trigger stops
-    # a bug or direct DB write from breaking the invariant.
-    trigger_sql = """
-    CREATE TRIGGER IF NOT EXISTS trg_max_two_companies_per_device
-    BEFORE INSERT ON device_company_assignments
-    FOR EACH ROW
-    WHEN (
-        SELECT COUNT(*)
-        FROM device_company_assignments
-        WHERE device_id = NEW.device_id
-    ) >= 2
-    BEGIN
-        SELECT RAISE(ABORT, 'max 2 companies per device');
-    END;
-    """
     with engine.begin() as conn:
-        conn.exec_driver_sql(trigger_sql)
+        # Seed the singleton settings row if missing. Default max = 2 to
+        # preserve historical behavior of pre-settings deployments.
+        conn.exec_driver_sql(
+            "INSERT OR IGNORE INTO app_settings (id, max_companies_per_device) VALUES (1, 2)"
+        )
+
+        # Drop the legacy hard-coded "max 2" trigger from earlier deploys, if
+        # present. The new trigger reads the current limit from app_settings
+        # so it always matches the admin-configured value.
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS trg_max_two_companies_per_device")
+        conn.exec_driver_sql("DROP TRIGGER IF EXISTS trg_max_companies_per_device")
+        conn.exec_driver_sql(
+            """
+            CREATE TRIGGER trg_max_companies_per_device
+            BEFORE INSERT ON device_company_assignments
+            FOR EACH ROW
+            WHEN (
+                SELECT COUNT(*) FROM device_company_assignments
+                WHERE device_id = NEW.device_id
+            ) >= (SELECT max_companies_per_device FROM app_settings WHERE id = 1)
+            BEGIN
+                SELECT RAISE(ABORT, 'max companies per device exceeded');
+            END;
+            """
+        )
     logger.info("Application database initialized at %s", db_path)

@@ -5,14 +5,13 @@ import DeviceDetailDrawer from '../components/DeviceDetailDrawer.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import SyncStatus from '../components/SyncStatus.jsx'
 
-const MAX_COMPANIES = 2
-
 export default function Setup({ onToast }) {
   const [tab, setTab] = useState('devices')
   const [companies, setCompanies] = useState([])
   const [devices, setDevices] = useState([])
   const [syncStatus, setSyncStatus] = useState(null)
   const [drawerDevice, setDrawerDevice] = useState(null)
+  const [settings, setSettings] = useState(null)
 
   // filters
   const [q, setQ] = useState('')
@@ -20,15 +19,19 @@ export default function Setup({ onToast }) {
   const [filterSource, setFilterSource] = useState('')
 
   const refresh = useCallback(async () => {
-    const [cs, ds, st] = await Promise.all([
+    const [cs, ds, st, sg] = await Promise.all([
       api.listCompanies(),
       api.listDevices({ q, company_id: filterCompany || undefined, source: filterSource || undefined }),
       api.syncStatus(),
+      api.getSettings(),
     ])
     setCompanies(cs)
     setDevices(ds)
     setSyncStatus(st)
+    setSettings(sg)
   }, [q, filterCompany, filterSource])
+
+  const maxCompanies = settings?.max_companies_per_device ?? 2
 
   useEffect(() => {
     const t = setTimeout(() => refresh().catch((e) => onToast?.('Error: ' + e.message)), 200)
@@ -55,12 +58,14 @@ export default function Setup({ onToast }) {
         <button className={`tab ${tab === 'devices' ? 'active' : ''}`} onClick={() => setTab('devices')}>Devices</button>
         <button className={`tab ${tab === 'companies' ? 'active' : ''}`} onClick={() => setTab('companies')}>Companies</button>
         <button className={`tab ${tab === 'sync' ? 'active' : ''}`} onClick={() => setTab('sync')}>Sync & Schema</button>
+        <button className={`tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>Settings</button>
       </div>
 
       {tab === 'devices' && (
         <DevicesTab
           devices={devices}
           companies={companies}
+          maxCompanies={maxCompanies}
           q={q} setQ={setQ}
           filterCompany={filterCompany} setFilterCompany={setFilterCompany}
           filterSource={filterSource} setFilterSource={setFilterSource}
@@ -75,11 +80,15 @@ export default function Setup({ onToast }) {
       {tab === 'sync' && (
         <SyncTab status={syncStatus} onTrigger={triggerSync} onRefresh={refresh} />
       )}
+      {tab === 'settings' && (
+        <SettingsTab settings={settings} onChanged={refresh} onToast={onToast} />
+      )}
 
       {drawerDevice && (
         <DeviceDetailDrawer
           device={drawerDevice}
           companies={companies}
+          maxCompanies={maxCompanies}
           onClose={() => setDrawerDevice(null)}
           onChanged={async (deleted) => {
             await refresh()
@@ -98,7 +107,7 @@ export default function Setup({ onToast }) {
 }
 
 // ----------------------------------------------------------------------
-function DevicesTab({ devices, companies, q, setQ, filterCompany, setFilterCompany, filterSource, setFilterSource, onChanged, onToast, onOpen }) {
+function DevicesTab({ devices, companies, maxCompanies, q, setQ, filterCompany, setFilterCompany, filterSource, setFilterSource, onChanged, onToast, onOpen }) {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ rustdesk_id: '', nickname: '', hostname: '', notes: '' })
   const [err, setErr] = useState('')
@@ -215,7 +224,7 @@ function DevicesTab({ devices, companies, q, setQ, filterCompany, setFilterCompa
                     {d.companies?.length
                       ? d.companies.map(c => <span key={c.id} className="pill" style={{ marginRight: 4 }}>{c.name}</span>)
                       : <span className="muted">—</span>}
-                    {(d.companies?.length || 0) >= MAX_COMPANIES && <span className="muted"> (max {MAX_COMPANIES})</span>}
+                    {(d.companies?.length || 0) >= maxCompanies && <span className="muted"> (max {maxCompanies})</span>}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <CopyButton value={d.rustdesk_id} label="Copy ID" disabled={!d.rustdesk_id} onCopied={() => onToast?.('Copied')} />
@@ -441,5 +450,80 @@ function SyncTab({ status, onTrigger, onRefresh }) {
         )}
       </div>
     </>
+  )
+}
+
+// ----------------------------------------------------------------------
+function SettingsTab({ settings, onChanged, onToast }) {
+  const [value, setValue] = useState(settings?.max_companies_per_device ?? 2)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  // Keep local state in sync when the parent reloads.
+  useEffect(() => {
+    if (settings?.max_companies_per_device != null) {
+      setValue(settings.max_companies_per_device)
+    }
+  }, [settings?.max_companies_per_device])
+
+  const save = async (e) => {
+    e.preventDefault()
+    setErr('')
+    const n = Number(value)
+    if (!Number.isInteger(n) || n < 1 || n > 20) {
+      setErr('Enter a whole number between 1 and 20.')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.updateSettings({ max_companies_per_device: n })
+      onToast?.('Settings saved')
+      onChanged?.()
+    } catch (e) {
+      setErr(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const current = settings?.max_companies_per_device
+  const dirty = Number(value) !== current
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <h2>Assignment limits</h2>
+      </div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Controls how many companies a single device can be assigned to. Enforced
+        both by the API and by a SQLite trigger, so direct DB writes cannot
+        bypass it. Lowering the value is only allowed when no device currently
+        exceeds the new limit.
+      </p>
+      <form onSubmit={save}>
+        {err && <div className="pill warn" style={{ marginBottom: 10 }}>{err}</div>}
+        <label className="field" style={{ maxWidth: 260 }}>
+          <span>Max companies per device</span>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            step={1}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+        </label>
+        <div className="row">
+          <button type="submit" className="btn primary" disabled={saving || !dirty}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          {current != null && (
+            <span className="muted">
+              Currently in effect: <strong style={{ color: 'inherit' }}>{current}</strong>
+            </span>
+          )}
+        </div>
+      </form>
+    </div>
   )
 }

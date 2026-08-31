@@ -95,3 +95,17 @@ class SyncRun(Base):
     devices_seen: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     devices_inserted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     devices_updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class AppSetting(Base):
+    """Singleton settings row (id = 1). Admin-editable at runtime via the
+    Setup UI; also read by the SQLite trigger that guards the
+    max-companies-per-device invariant."""
+
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    max_companies_per_device: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, onupdate=_utcnow, nullable=False
+    )

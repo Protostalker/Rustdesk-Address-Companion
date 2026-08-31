@@ -52,6 +52,10 @@ export const api = {
   syncStatus: () => request('/sync/status'),
   triggerSync: () => request('/sync/trigger', { method: 'POST' }),
   schemaReport: () => request('/sync/schema'),
+
+  // Runtime settings (admin-editable)
+  getSettings: () => request('/settings'),
+  updateSettings: (payload) => request('/settings', { method: 'PATCH', body: payload }),
 }
 
 // Clipboard helper — returns true on success, false on failure.

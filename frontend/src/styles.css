@@ -35,7 +35,15 @@ body {
   line-height: 1.45;
 }
 
-.app { min-height: 100vh; display: flex; flex-direction: column; }
+/* Bound the app to the viewport so inner scroll regions (Home's sidebar +
+ * content grid) can actually overflow. If we used min-height:100vh here the
+ * page would grow past the viewport and the internal `overflow: auto` panes
+ * would never engage — the top bar and side rail would scroll off. */
+.app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Setup is a normal top-to-bottom scrolling admin page; give it its own
+ * scroll context so the app-level `overflow: hidden` doesn't clip it. */
+.setup { overflow: auto; }
 
 /* Top navigation */
 .topbar {
