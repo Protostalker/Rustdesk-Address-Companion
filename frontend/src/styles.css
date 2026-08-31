@@ -79,6 +79,11 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* Flex items default to min-height: auto, which lets .home grow to fit its
+   * children's intrinsic height even when the parent has overflow: hidden.
+   * Without this override, .home reports an oversized height to .home-main
+   * and the child pane's overflow: auto never engages. */
+  min-height: 0;
 }
 .home .home-header {
   padding: 14px 24px;
@@ -95,14 +100,32 @@ body {
   letter-spacing: 0.3px;
 }
 .home .home-header .spacer { flex: 1; }
-.home .home-main { flex: 1; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
+.home .home-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  /* Explicit row track. Without this the implicit row is `auto` and grows to
+   * fit content, which pushes the device grid past the viewport and defeats
+   * overflow:auto on the pane below. `minmax(0, 1fr)` caps the row at the
+   * available height so the pane can actually scroll. */
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
 .home .home-sidebar {
   border-right: 1px solid var(--home-border);
   padding: 12px;
   overflow: auto;
   background: var(--home-panel);
+  /* Grid items default to min-height: auto, which refuses to shrink below the
+   * content's intrinsic size. Without this override the pane grows to fit its
+   * children and `overflow: auto` never engages. */
+  min-height: 0;
 }
-.home .home-content { padding: 16px 24px; overflow: auto; }
+.home .home-content {
+  padding: 16px 24px;
+  overflow: auto;
+  min-height: 0; /* Same story — required for the device grid to scroll. */
+}
 .home .company-tile {
   width: 100%;
   text-align: left;
